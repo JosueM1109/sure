@@ -115,3 +115,10 @@ backfill_account_logos:
   active_job: true
   queue: "scheduled"
   description: "Fetches icons for accounts with an institution domain and no logo"
+
+carry_budgets_forward:
+  cron: "15 5 * * *" # 5:15 AM every day; a no-op once the month is set up
+  class: "BudgetCarryForwardJob"
+  active_job: true
+  queue: "scheduled"
+  description: "Starts a new budget month from the previous month's amounts"
