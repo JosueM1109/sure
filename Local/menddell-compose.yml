@@ -61,7 +61,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 768m                  # a full sync of all Items wants ~1 GB; the rest goes to swap
+    mem_limit: 1280m                 # a full sync of all Items wants ~1 GB
 
   db:
     image: postgres:16
