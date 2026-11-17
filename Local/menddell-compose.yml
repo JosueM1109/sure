@@ -1,0 +1,114 @@
+# Sure on menddell (~/sure/), served at https://budget.mendhome.net through
+# Nginx Proxy Manager on macux. Secrets live in ./.env (chmod 600, never in
+# git); see .env.example. The image is built by GitHub Actions
+# (.github/workflows/josue-image.yml), never on menddell.
+name: sure
+
+x-db-env: &db_env
+  POSTGRES_USER: sure_user
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+  POSTGRES_DB: sure_production
+
+x-rails-env: &rails_env
+  <<: *db_env
+  SECRET_KEY_BASE: ${SECRET_KEY_BASE:?Set SECRET_KEY_BASE in .env}
+  ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY: ${ACTIVE_RECORD_ENCRYPTION_PRIMARY_KEY:?Set in .env}
+  ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY: ${ACTIVE_RECORD_ENCRYPTION_DETERMINISTIC_KEY:?Set in .env}
+  ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT: ${ACTIVE_RECORD_ENCRYPTION_KEY_DERIVATION_SALT:?Set in .env}
+  SELF_HOSTED: "true"
+  RAILS_FORCE_SSL: "false"
+  RAILS_ASSUME_SSL: "true"            # NPM terminates TLS
+  APP_DOMAIN: budget.mendhome.net
+  DB_HOST: db
+  DB_PORT: 5432
+  REDIS_URL: redis://redis:6379/1
+  PLAID_CLIENT_ID: ${PLAID_CLIENT_ID}
+  PLAID_SECRET: ${PLAID_SECRET}
+  PLAID_ENV: ${PLAID_ENV:-production}
+  # The fork's Plaid guardrails (app/models/plaid_guardrails.rb). Both stay off.
+  PLAID_ALLOW_LINK: ${PLAID_ALLOW_LINK:-false}
+  PLAID_ALLOW_TRANSACTIONS_REFRESH: ${PLAID_ALLOW_TRANSACTIONS_REFRESH:-false}
+
+services:
+  web:
+    image: ghcr.io/josuem1109/sure:${SURE_IMAGE_TAG:-latest-josue}
+    restart: unless-stopped
+    environment:
+      <<: *rails_env
+    ports:
+      - "4440:3000"                   # NPM on macux proxies budget.mendhome.net here (LAN 192.168.1.86)
+    volumes:
+      - app-storage:/rails/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 512m
+
+  worker:
+    image: ghcr.io/josuem1109/sure:${SURE_IMAGE_TAG:-latest-josue}
+    command: bundle exec sidekiq
+    restart: unless-stopped
+    environment:
+      <<: *rails_env
+    volumes:
+      - app-storage:/rails/storage
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    mem_limit: 512m
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    command: postgres -c shared_buffers=64MB -c max_connections=40
+    environment:
+      <<: *db_env
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 64m
+
+  # One-off backups only (Local/backup.sh runs `docker compose run --rm backup
+  # scheduled` from cron). Not started by `docker compose up`.
+  backup:
+    profiles: ["backup"]
+    image: ghcr.io/josuem1109/sure:${SURE_IMAGE_TAG:-latest-josue}
+    user: "1000:1000"                # josue on menddell, so cron can mirror the files
+    entrypoint: ["bin/sure-backup"]
+    volumes:
+      - ./backups:/backups
+      - app-storage:/rails/storage
+      - .:/config:ro
+    environment:
+      <<: *db_env
+      POSTGRES_HOST: db
+      BACKUP_KEEP_DAYS: "14"
+      SURE_IMAGE_REPO: ghcr.io/josuem1109/sure
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  app-storage:
+  postgres-data:
+  redis-data:
