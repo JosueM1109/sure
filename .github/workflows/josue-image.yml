@@ -68,11 +68,11 @@ jobs:
           bin/rails db:create
           bin/rails db:schema:load
 
-      # Every unit test that mentions Plaid or the sync schedule, plus the
+      # Every unit test that mentions Plaid, the sync schedule or the budget carry-forward, plus the
       # fork's own tests.
       - name: Run the tests
         run: |
-          mapfile -t files < <(grep -rliE --include='*_test.rb' 'plaid|sync_schedule' test | grep -v '^test/system/' | LC_ALL=C sort)
+          mapfile -t files < <(grep -rliE --include='*_test.rb' 'plaid|sync_schedule|budget_carry_forward' test | grep -v '^test/system/' | LC_ALL=C sort)
           if [ "${#files[@]}" -eq 0 ]; then
             echo "No test files found" >&2
             exit 1
