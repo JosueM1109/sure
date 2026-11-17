@@ -52,6 +52,8 @@ services:
     restart: unless-stopped
     environment:
       <<: *rails_env
+      RAILS_MAX_THREADS: "2"            # one sync job at a time (plus the AI lane), keeps memory down
+      MALLOC_CONF: "narenas:2,background_thread:true,dirty_decay_ms:1000,muzzy_decay_ms:0"
     volumes:
       - app-storage:/rails/storage
     depends_on:
@@ -59,7 +61,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 768m                  # a full first sync of all Items peaks near 512m
+    mem_limit: 768m                  # a full sync of all Items wants ~1 GB; the rest goes to swap
 
   db:
     image: postgres:16
