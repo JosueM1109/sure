@@ -129,3 +129,10 @@ categorize_pseg_debit:
   active_job: true
   queue: "scheduled"
   description: "Files the PSEG electric debit on Amex Rewards Checking under Utilities"
+
+confirm_clear_transfers:
+  cron: "20 * * * *" # hourly, after the hourly sync
+  class: "TransferAutoConfirmJob"
+  active_job: true
+  queue: "scheduled"
+  description: "Confirms clear-cut auto-matched transfers from checking to cards, loans, brokerages and other checking"
