@@ -1,0 +1,149 @@
+# Josue's fork: tests the fork's Plaid patches and builds the image that
+# menddell runs (ghcr.io/josuem1109/sure). Upstream's workflows are disabled in
+# this fork with `gh workflow disable`; see Local/README.md.
+#
+# A push to `josue` tests, then builds and pushes <base tag>-josue and
+# latest-josue. A push to a `wip/**` branch only runs the tests.
+name: Josue image
+
+on:
+  push:
+    branches:
+      - josue
+      - "wip/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: josue-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Plaid tests
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    env:
+      PLAID_CLIENT_ID: foo
+      PLAID_SECRET: bar
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432 # pipelock:ignore
+      REDIS_URL: redis://localhost:6379
+      RAILS_ENV: test
+
+    services:
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: --health-cmd="pg_isready" --health-interval=10s --health-timeout=5s --health-retries=3
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: --health-cmd="redis-cli ping" --health-interval=10s --health-timeout=5s --health-retries=3
+
+    steps:
+      - name: Install packages
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends -y curl libvips postgresql-client libpq-dev
+
+      - name: Check out the repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@97ecb7b512899eb71ab1bf2310a624c6f1589ac6 # v1.308.0
+        with:
+          ruby-version: .ruby-version
+          bundler-cache: true
+
+      - name: Set up the database
+        run: |
+          bin/rails db:create
+          bin/rails db:schema:load
+
+      # Every unit test that mentions Plaid or the sync schedule, plus the
+      # fork's own tests.
+      - name: Run the tests
+        run: |
+          mapfile -t files < <(grep -rliE --include='*_test.rb' 'plaid|sync_schedule' test | grep -v '^test/system/' | LC_ALL=C sort)
+          if [ "${#files[@]}" -eq 0 ]; then
+            echo "No test files found" >&2
+            exit 1
+          fi
+          printf '%s\n' "${files[@]}"
+          bin/rails test:prepare
+          bin/rails test "${files[@]}"
+
+  build:
+    name: Build and push the image
+    needs: test
+    if: github.ref == 'refs/heads/josue'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # The fork has no release tags of its own, so read them from upstream.
+      - name: Find the upstream release this build is based on
+        id: base
+        run: |
+          git fetch --quiet --tags https://github.com/we-promise/sure.git
+          base=$(git describe --tags --abbrev=0 --match 'v2*' HEAD)
+          echo "Base release: $base"
+          echo "tag=$base" >> "$GITHUB_OUTPUT"
+          echo "version=${base#v}" >> "$GITHUB_OUTPUT"
+          printf '%s\n' "${base#v}" > .sure-version
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@4907a6ddec9925e35a0a9e82d7399ccc52663121 # v4.1.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Image tags and labels
+        id: meta
+        uses: docker/metadata-action@030e881283bb7a6894de51c315a6bfe6a94e05cf # v6.0.0
+        with:
+          images: ghcr.io/josuem1109/sure
+          flavor: latest=false
+          tags: |
+            type=raw,value=${{ steps.base.outputs.tag }}-josue
+            type=raw,value=latest-josue
+            type=sha,prefix=sha-,format=short
+          labels: |
+            org.opencontainers.image.version=${{ steps.base.outputs.version }}-josue
+            org.opencontainers.image.title=Sure (Josue's fork)
+            org.opencontainers.image.source=https://github.com/JosueM1109/sure
+
+      - name: Build and push linux/amd64
+        uses: docker/build-push-action@bcafcacb16a39f128d818304e6c9c0c18556b85f # v7.1.0
+        with:
+          context: .
+          build-args: BUILD_COMMIT_SHA=${{ github.sha }}
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: false
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
