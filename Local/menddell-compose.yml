@@ -59,7 +59,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    mem_limit: 512m
+    mem_limit: 768m                  # a full first sync of all Items peaks near 512m
 
   db:
     image: postgres:16

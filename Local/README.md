@@ -55,7 +55,7 @@ Only `.github/workflows/josue-image.yml` runs in the fork. Upstream's workflows 
 
 ## menddell
 - `~/sure/`: `compose.yml` (a copy of `Local/menddell-compose.yml`), `.env` (chmod 600, see `Local/.env.example`), `backup.sh`, `backups/`.
-- Containers: web (:4440), worker (Sidekiq), db (Postgres 16), redis, each with a `mem_limit`.
+- Containers: web (:4440, 512m), worker (Sidekiq, 768m: a first sync of all five Items peaked at 512m), db (Postgres 16, 256m), redis (64m).
 - `SECRET_KEY_BASE` and the three `ACTIVE_RECORD_ENCRYPTION_*` keys must never change: the Plaid tokens in the database are encrypted with them. Every backup holds a copy of `.env`.
 
 ## Backups and restore
