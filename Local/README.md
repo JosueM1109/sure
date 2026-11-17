@@ -13,6 +13,8 @@ This checkout is the budgeting app at https://budget.mendhome.net: upstream Sure
 |---|---|
 | Plaid guardrails | `app/models/plaid_guardrails.rb`, `config/initializers/plaid_guardrails.rb`, `test/models/plaid_guardrails_test.rb` |
 | Import an existing Plaid Item by access token | `app/models/plaid_item/token_import.rb`, `lib/tasks/plaid_import.rake`, `test/models/plaid_item/token_import_test.rb` |
+| File the PSEG electric debit on Amex checking under Utilities (daily) | `app/jobs/pseg_debit_categorize_job.rb`, `config/schedule.yml`, `test/jobs/pseg_debit_categorize_job_test.rb` |
+| A goal put on the balance basis keeps it | `app/models/goal_basis_default_on_create.rb`, `config/initializers/goal_basis_default_on_create.rb`, `test/models/goal_basis_default_on_create_test.rb` |
 | Image build | `.github/workflows/josue-image.yml` |
 | Deploy, update, backup | `Local/` |
 

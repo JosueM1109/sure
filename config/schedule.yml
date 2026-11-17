@@ -122,3 +122,10 @@ carry_budgets_forward:
   active_job: true
   queue: "scheduled"
   description: "Starts a new budget month from the previous month's amounts"
+
+categorize_pseg_debit:
+  cron: "45 5 * * *" # 5:45 AM every day
+  class: "PsegDebitCategorizeJob"
+  active_job: true
+  queue: "scheduled"
+  description: "Files the PSEG electric debit on Amex Rewards Checking under Utilities"
