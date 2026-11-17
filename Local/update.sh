@@ -108,7 +108,7 @@ set -euo pipefail
 cd ~/sure
 previous=$(grep -E '^SURE_IMAGE_TAG=' .env | cut -d= -f2-)
 echo "Backing up first (current image: ${previous:-unknown})..."
-./backup.sh
+./backup.sh </dev/null  # docker compose run would otherwise read (and eat) the rest of this script
 docker pull --quiet "ghcr.io/josuem1109/sure:$TAG" >/dev/null
 sed -i "s/^SURE_IMAGE_TAG=.*/SURE_IMAGE_TAG=$TAG/" .env
 # web runs db:prepare (migrations) when it starts.
