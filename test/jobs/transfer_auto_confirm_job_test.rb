@@ -24,8 +24,9 @@ class TransferAutoConfirmJobTest < ActiveJob::TestCase
     assert transfer.reload.pending?
   end
 
-  test "leaves a pair alone when the amounts differ" do
-    transfer = pending_transfer(from: @checking, to: @card, out_amount: 100, in_amount: 90)
+  test "leaves a match older than 30 days alone" do
+    transfer = pending_transfer(from: @checking, to: @card, out_amount: 100, in_amount: 100)
+    transfer.update_column(:created_at, 31.days.ago)
 
     TransferAutoConfirmJob.perform_now
 
